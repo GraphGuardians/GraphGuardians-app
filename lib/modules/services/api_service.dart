@@ -72,6 +72,33 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>?> getDashboard(String repoId) async {
+    try {
+      final res = await http.get(
+        Uri.parse("$baseUrl/api/dashboard/$repoId"),
+        headers: headers,
+      );
+
+      log("==== DASHBOARD API DEBUG START ====");
+      log("URL: $baseUrl/api/dashboard/$repoId");
+      log("STATUS CODE: ${res.statusCode}");
+      log("RESPONSE BODY: ${res.body}");
+      log("TOKEN USED: $token");
+      log("==== DASHBOARD API DEBUG END ====");
+
+      final data = jsonDecode(res.body);
+
+      if (res.statusCode == 200) {
+        return data;
+      } else {
+        throw Exception(data["message"] ?? "Failed to fetch dashboard");
+      }
+    } catch (e) {
+      log("Dashboard Error: $e");
+      return null;
+    }
+  }
+
   static Future<void> saveDeviceToken(String fcmToken) async {
     try {
       final res = await http.post(
