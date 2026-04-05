@@ -42,6 +42,8 @@ dependencies:
   get_storage: ^2.1.1
   url_launcher: ^6.3.2
   app_links: ^3.5.0
+  flutter_local_notifications: ^17.2.4
+  cloud_firestore: ^6.2.0
 
 dev_dependencies:
   flutter_test:

@@ -4,6 +4,8 @@ import 'package:graph_guard/repomodel.dart';
 import 'package:http/http.dart' as http;
 import 'package:get_storage/get_storage.dart';
 import '../dashboard/dashboard_model.dart';
+import '../vulnerabilities/vulnerabilities_screen.dart';
+import '../alerts/alerts_screen.dart';
 
 class ApiService {
   static const String baseUrl = "https://graphguardians-backend.onrender.com";
@@ -92,7 +94,6 @@ class ApiService {
     }
   }
 
-  // ✅ NEW - Vulnerabilities fetch
   static Future<List<dynamic>> getVulnerabilities(String repoId) async {
     try {
       final res = await http.get(
@@ -112,6 +113,33 @@ class ApiService {
       }
     } catch (e) {
       log("Vulnerabilities Error: $e");
+      return [];
+    }
+  }
+
+  static Future<List<dynamic>> getAlerts(String repoId) async {
+    try {
+      final uri = Uri.parse(
+        "$baseUrl/api/alerts",
+      ).replace(queryParameters: {"repo": repoId});
+
+      final res = await http.get(uri, headers: headers);
+
+      log("==== ALERTS API DEBUG START ====");
+      log("URL: $uri");
+      log("STATUS CODE: ${res.statusCode}");
+      log("RESPONSE BODY: ${res.body}");
+      log("==== ALERTS API DEBUG END ====");
+
+      final data = jsonDecode(res.body);
+
+      if (res.statusCode == 200) {
+        return data['alerts'] ?? data ?? [];
+      } else {
+        throw Exception(data["msg"] ?? "Failed to fetch alerts");
+      }
+    } catch (e) {
+      log("Alerts Error: $e");
       return [];
     }
   }

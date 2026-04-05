@@ -37,7 +37,6 @@ class LoginController extends GetxController {
 
       box.write("token", token);
 
-      await FCMService.init();
       String? fcmToken = await FCMService.getToken();
 
       if (fcmToken != null) {
