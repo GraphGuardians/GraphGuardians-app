@@ -1,7 +1,9 @@
-// TODO Implement this library.
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../services/api_service.dart'; // adjust path if needed
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
+import 'dart:developer';
+import '../services/api_service.dart';
 
 class AlertsScreen extends StatefulWidget {
   const AlertsScreen({super.key});
@@ -18,11 +20,11 @@ class _AlertsScreenState extends State<AlertsScreen>
   bool isLoading = true;
   String? error;
   String selectedFilter = 'ALL';
+  StreamSubscription? _firestoreSubscription;
 
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
 
-  // ─── COLORS ───────────────────────────────────────────────
   static const _bg = Color(0xFF080C18);
   static const _card = Color(0xFF0D1225);
   static const _border = Color(0xFF1A2240);
@@ -41,15 +43,16 @@ class _AlertsScreenState extends State<AlertsScreen>
     );
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _fetch();
+    _startRealtimeListener();
   }
 
   @override
   void dispose() {
     _animController.dispose();
+    _firestoreSubscription?.cancel();
     super.dispose();
   }
 
-  // ─── FETCH via ApiService ─────────────────────────────────
   Future<void> _fetch() async {
     setState(() {
       isLoading = true;
@@ -70,7 +73,25 @@ class _AlertsScreenState extends State<AlertsScreen>
     }
   }
 
-  // ─── HELPERS ─────────────────────────────────────────────
+  void _startRealtimeListener() {
+    _firestoreSubscription = FirebaseFirestore.instance
+        .collection('alerts')
+        .doc(repoId)
+        .snapshots()
+        .listen((snapshot) {
+      if (!snapshot.exists) return;
+      final data = snapshot.data();
+      if (data == null) return;
+      final newAlerts = List<dynamic>.from(data['alerts'] ?? []);
+      setState(() {
+        alerts = newAlerts;
+        isLoading = false;
+      });
+      _animController.forward(from: 0);
+      log("Realtime alert update received");
+    });
+  }
+
   List<dynamic> get _filtered {
     if (selectedFilter == 'ALL') return alerts;
     return alerts
@@ -111,7 +132,6 @@ class _AlertsScreenState extends State<AlertsScreen>
 
   int get _highCount => _count('HIGH');
 
-  // ─── BUILD ───────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -129,7 +149,6 @@ class _AlertsScreenState extends State<AlertsScreen>
     );
   }
 
-  // ─── HEADER ──────────────────────────────────────────────
   Widget _header() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -160,7 +179,6 @@ class _AlertsScreenState extends State<AlertsScreen>
               ],
             ),
           ),
-          // critical badge
           if (_highCount > 0) ...[
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -233,7 +251,6 @@ class _AlertsScreenState extends State<AlertsScreen>
     ),
   );
 
-  // ─── BANNER ──────────────────────────────────────────────
   Widget _banner() => Container(
     margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
     padding: const EdgeInsets.all(16),
@@ -293,7 +310,6 @@ class _AlertsScreenState extends State<AlertsScreen>
     ),
   );
 
-  // ─── FILTER CHIPS ────────────────────────────────────────
   Widget _filterChips() {
     final filters = ['ALL', 'HIGH', 'MEDIUM', 'LOW'];
     return Padding(
@@ -367,7 +383,6 @@ class _AlertsScreenState extends State<AlertsScreen>
     );
   }
 
-  // ─── BODY ────────────────────────────────────────────────
   Widget _body() {
     if (isLoading) {
       return const Center(child: CircularProgressIndicator(color: _cyan));
@@ -378,7 +393,7 @@ class _AlertsScreenState extends State<AlertsScreen>
     if (list.isEmpty) {
       return _emptyView(
         selectedFilter == 'ALL'
-            ? 'No active alerts ✅'
+            ? 'No active alerts'
             : 'No $selectedFilter alerts',
         Icons.notifications_off_outlined,
       );
@@ -396,12 +411,9 @@ class _AlertsScreenState extends State<AlertsScreen>
           itemBuilder: (ctx, i) {
             final v = list[i];
             final severity = (v['severity'] ?? 'LOW').toString().toUpperCase();
-            // flexible field mapping
             final package = v['package'] ?? v['title'] ?? 'Unknown';
-            final fix =
-                v['fix'] ?? v['description'] ?? v['message'] ?? 'No details';
+            final fix = v['fix'] ?? v['description'] ?? v['message'] ?? 'No details';
             final color = _color(severity);
-
             return TweenAnimationBuilder<double>(
               tween: Tween(begin: 0, end: 1),
               duration: Duration(milliseconds: 300 + (i * 60).clamp(0, 600)),
@@ -425,7 +437,6 @@ class _AlertsScreenState extends State<AlertsScreen>
     );
   }
 
-  // ─── ALERT CARD ──────────────────────────────────────────
   Widget _alertCard({
     required String severity,
     required String package,

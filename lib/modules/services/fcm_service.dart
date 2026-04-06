@@ -129,4 +129,8 @@ class FCMService {
     if (repoId == null || repoId.isEmpty) return;
     Get.toNamed('/alert-detail', arguments: repoId);
   }
+
+  static Future<String?> getToken() async {
+    return await _messaging.getToken();
+  }
 }

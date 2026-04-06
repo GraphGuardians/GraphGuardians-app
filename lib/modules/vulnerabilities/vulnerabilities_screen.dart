@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../services/api_service.dart'; // adjust path if needed
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
+import 'dart:developer';
+import '../services/api_service.dart';
 
 class VulnerabilitiesScreen extends StatefulWidget {
   const VulnerabilitiesScreen({super.key});
@@ -17,11 +20,11 @@ class _VulnerabilitiesScreenState extends State<VulnerabilitiesScreen>
   bool isLoading = true;
   String? error;
   String selectedFilter = 'ALL';
+  StreamSubscription? _firestoreSubscription;
 
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
 
-  // ─── COLORS ───────────────────────────────────────────────
   static const _bg = Color(0xFF080C18);
   static const _card = Color(0xFF0D1225);
   static const _border = Color(0xFF1A2240);
@@ -40,15 +43,16 @@ class _VulnerabilitiesScreenState extends State<VulnerabilitiesScreen>
     );
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _fetch();
+    _startRealtimeListener();
   }
 
   @override
   void dispose() {
     _animController.dispose();
+    _firestoreSubscription?.cancel();
     super.dispose();
   }
 
-  // ─── FETCH via ApiService ─────────────────────────────────
   Future<void> _fetch() async {
     setState(() {
       isLoading = true;
@@ -69,7 +73,25 @@ class _VulnerabilitiesScreenState extends State<VulnerabilitiesScreen>
     }
   }
 
-  // ─── HELPERS ─────────────────────────────────────────────
+  void _startRealtimeListener() {
+    _firestoreSubscription = FirebaseFirestore.instance
+        .collection('alerts')
+        .doc(repoId)
+        .snapshots()
+        .listen((snapshot) {
+      if (!snapshot.exists) return;
+      final data = snapshot.data();
+      if (data == null) return;
+      final newVulns = List<dynamic>.from(data['vulnerabilities'] ?? []);
+      setState(() {
+        vulnerabilities = newVulns;
+        isLoading = false;
+      });
+      _animController.forward(from: 0);
+      log("Realtime vuln update received");
+    });
+  }
+
   List<dynamic> get _filtered {
     if (selectedFilter == 'ALL') return vulnerabilities;
     return vulnerabilities
@@ -97,7 +119,6 @@ class _VulnerabilitiesScreenState extends State<VulnerabilitiesScreen>
             .where((v) => (v['severity'] ?? '').toString().toUpperCase() == f)
             .length;
 
-  // ─── BUILD ───────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -115,7 +136,6 @@ class _VulnerabilitiesScreenState extends State<VulnerabilitiesScreen>
     );
   }
 
-  // ─── HEADER ──────────────────────────────────────────────
   Widget _header() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -185,7 +205,6 @@ class _VulnerabilitiesScreenState extends State<VulnerabilitiesScreen>
     ),
   );
 
-  // ─── SUMMARY ROW ─────────────────────────────────────────
   Widget _summaryRow() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -229,7 +248,6 @@ class _VulnerabilitiesScreenState extends State<VulnerabilitiesScreen>
     ),
   );
 
-  // ─── FILTER CHIPS ────────────────────────────────────────
   Widget _filterChips() {
     final filters = ['ALL', 'HIGH', 'MEDIUM', 'LOW'];
     return Padding(
@@ -303,7 +321,6 @@ class _VulnerabilitiesScreenState extends State<VulnerabilitiesScreen>
     );
   }
 
-  // ─── BODY ────────────────────────────────────────────────
   Widget _body() {
     if (isLoading) {
       return const Center(child: CircularProgressIndicator(color: _cyan));
@@ -314,7 +331,7 @@ class _VulnerabilitiesScreenState extends State<VulnerabilitiesScreen>
     if (list.isEmpty) {
       return _emptyView(
         selectedFilter == 'ALL'
-            ? 'No vulnerabilities found ✅'
+            ? 'No vulnerabilities found'
             : 'No $selectedFilter vulnerabilities',
         Icons.shield_outlined,
       );
@@ -334,9 +351,8 @@ class _VulnerabilitiesScreenState extends State<VulnerabilitiesScreen>
             final severity = (v['severity'] ?? 'LOW').toString().toUpperCase();
             final package = v['package'] ?? 'Unknown Package';
             final fix = v['fix'] ?? 'No fix available';
-            final cve = v['cve'] ?? 'CVE-${1234 + i}';
+            final cve = v['cve'] ?? '';
             final color = _color(severity);
-
             return TweenAnimationBuilder<double>(
               tween: Tween(begin: 0, end: 1),
               duration: Duration(milliseconds: 300 + (i * 60).clamp(0, 600)),
@@ -361,7 +377,6 @@ class _VulnerabilitiesScreenState extends State<VulnerabilitiesScreen>
     );
   }
 
-  // ─── VULN CARD ───────────────────────────────────────────
   Widget _vulnCard({
     required String severity,
     required String package,
@@ -419,14 +434,16 @@ class _VulnerabilitiesScreenState extends State<VulnerabilitiesScreen>
                           _badge(severity, color),
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        cve,
-                        style: TextStyle(
-                          color: color.withOpacity(0.8),
-                          fontSize: 11,
+                      if (cve.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          cve,
+                          style: TextStyle(
+                            color: color.withOpacity(0.8),
+                            fontSize: 11,
+                          ),
                         ),
-                      ),
+                      ],
                       const SizedBox(height: 6),
                       Text(
                         fix,
@@ -454,7 +471,11 @@ class _VulnerabilitiesScreenState extends State<VulnerabilitiesScreen>
     ),
     child: Text(
       label,
-      style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
+      style: TextStyle(
+        color: color,
+        fontSize: 11,
+        fontWeight: FontWeight.bold,
+      ),
     ),
   );
 

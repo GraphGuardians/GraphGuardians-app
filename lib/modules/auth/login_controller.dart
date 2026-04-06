@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:get_storage/get_storage.dart';
@@ -41,6 +43,9 @@ class LoginController extends GetxController {
 
       if (fcmToken != null) {
         await ApiService.saveDeviceToken(fcmToken);
+        log("TOKEN SENT TO BACKEND");
+      } else {
+        log("FCM TOKEN NULL — notification nahi aayegi"); // ← ADD
       }
 
       Get.offAllNamed("/repos");
